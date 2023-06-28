@@ -9,20 +9,20 @@ import android.content.Context;
 import android.os.Build;
 import android.os.Handler;
 import android.os.ParcelFileDescriptor;
+import android.util.Base64;
 import android.util.Log;
+import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
-import android.webkit.WebSettings;
-import java.io.File;
-import android.util.Base64;
-import java.io.IOException;
-import java.io.RandomAccessFile;
-
 import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.WritableMap;
-
 import com.tom_roush.pdfbox.pdmodel.PDDocument;
+
+import java.io.File;
+import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.util.concurrent.Semaphore;
 
 /**
  * Converts HTML to PDF.
@@ -36,6 +36,8 @@ public class PdfConverter implements Runnable {
     private static PdfConverter sInstance;
 
     private Context mContext;
+
+    private Semaphore mMutex;
     private String mHtmlString;
     private File mPdfFile;
     private PrintAttributes mPdfPrintAttrs;
@@ -46,93 +48,90 @@ public class PdfConverter implements Runnable {
     private Promise mPromise;
     private String mBaseURL;
 
-    private PdfConverter() {
+    private PdfConverter () {
     }
 
-    public static synchronized PdfConverter getInstance() {
+    public static synchronized PdfConverter getInstance () {
         if (sInstance == null)
-            sInstance = new PdfConverter();
+            sInstance = new PdfConverter ();
 
         return sInstance;
     }
 
     @Override
-    public void run() {
-        mWebView = new WebView(mContext);
-        mWebView.setWebViewClient(new WebViewClient() {
+    public void run () {
+        mWebView = new WebView (mContext);
+        mWebView.setWebViewClient (new WebViewClient () {
             @Override
-            public void onPageFinished(WebView view, String url) {
+            public void onPageFinished (WebView view, String url) {
                 if (Build.VERSION.SDK_INT < Build.VERSION_CODES.KITKAT)
-                    throw new RuntimeException("call requires API level 19");
+                    throw new RuntimeException ("call requires API level 19");
                 else {
-                    PrintDocumentAdapter documentAdapter = mWebView.createPrintDocumentAdapter();
-                    documentAdapter.onLayout(null, getPdfPrintAttrs(), null, new PrintDocumentAdapter.LayoutResultCallback() {
+                    PrintDocumentAdapter documentAdapter = mWebView.createPrintDocumentAdapter ();
+                    documentAdapter.onLayout (null, getPdfPrintAttrs (), null, new PrintDocumentAdapter.LayoutResultCallback () {
                     }, null);
-                    documentAdapter.onWrite(new PageRange[]{PageRange.ALL_PAGES}, getOutputFileDescriptor(), null, new PrintDocumentAdapter.WriteResultCallback() {
+                    documentAdapter.onWrite (new PageRange[]{PageRange.ALL_PAGES}, getOutputFileDescriptor (), null, new PrintDocumentAdapter.WriteResultCallback () {
                         @Override
-                        public void onWriteFinished(PageRange[] pages) {
+                        public void onWriteFinished (PageRange[] pages) {
                             try {
                                 String base64 = "";
                                 if (mShouldEncode) {
-                                    base64 = encodeFromFile(mPdfFile);
+                                    base64 = encodeFromFile (mPdfFile);
                                 }
 
-                                PDDocument myDocument = PDDocument.load(mPdfFile);
-                                int pagesToBePrinted = myDocument.getNumberOfPages();
+                                PDDocument myDocument = PDDocument.load (mPdfFile);
+                                int pagesToBePrinted = myDocument.getNumberOfPages ();
 
-                                mResultMap.putString("filePath", mPdfFile.getAbsolutePath());
-                                mResultMap.putString("numberOfPages", String.valueOf(pagesToBePrinted));
-                                mResultMap.putString("base64", base64);
-                                mPromise.resolve(mResultMap);
+                                mMutex.release ();
                             } catch (IOException e) {
-                                mPromise.reject(e.getMessage());
+                                mPromise.reject (e.getMessage ());
                             } finally {
-                                destroy();
+                                destroy ();
                             }
                         }
 
                         @Override
-                        public void onWriteFailed(CharSequence error) {
+                        public void onWriteFailed (CharSequence error) {
                             String errorResult = "Please retry, Error occurred generating the pdf";
                             if (error != null) {
-                                errorResult = error.toString();
+                                errorResult = error.toString ();
                             }
-                            mPromise.reject(errorResult);
-                            destroy();
+                            mPromise.reject (errorResult);
+                            destroy ();
                         }
 
                         @Override
-                        public void onWriteCancelled() {
-                            destroy();
+                        public void onWriteCancelled () {
+                            destroy ();
                         }
 
                     });
                 }
             }
         });
-        WebSettings settings = mWebView.getSettings();
-        settings.setTextZoom(100);
-        settings.setDefaultTextEncodingName("utf-8");
-        settings.setAllowFileAccess(true);
-        mWebView.loadDataWithBaseURL(mBaseURL, mHtmlString, "text/HTML", "utf-8", null);
+        WebSettings settings = mWebView.getSettings ();
+        settings.setTextZoom (100);
+        settings.setDefaultTextEncodingName ("utf-8");
+        settings.setAllowFileAccess (true);
+        mWebView.loadDataWithBaseURL (mBaseURL, mHtmlString, "text/HTML", "utf-8", null);
     }
 
-    public PrintAttributes getPdfPrintAttrs() {
-        return mPdfPrintAttrs != null ? mPdfPrintAttrs : getDefaultPrintAttrs();
+    public PrintAttributes getPdfPrintAttrs () {
+        return mPdfPrintAttrs != null ? mPdfPrintAttrs : getDefaultPrintAttrs ();
     }
 
-    public void setPdfPrintAttrs(PrintAttributes printAttrs) {
+    public void setPdfPrintAttrs (PrintAttributes printAttrs) {
         this.mPdfPrintAttrs = printAttrs;
     }
 
-    public void convert(Context context, String htmlString, File file, boolean shouldEncode, WritableMap resultMap,
-            Promise promise, String baseURL) throws Exception {
+    public void convert (Context context, String htmlString, File file, boolean shouldEncode, WritableMap resultMap,
+                         Promise promise, String baseURL, Semaphore mutex) throws Exception {
         if (context == null)
-            throw new Exception("context can't be null");
+            throw new Exception ("context can't be null");
         if (htmlString == null)
-            throw new Exception("htmlString can't be null");
+            throw new Exception ("htmlString can't be null");
         if (file == null)
-            throw new Exception("file can't be null");
+            throw new Exception ("file can't be null");
 
         if (mIsCurrentlyConverting)
             return;
@@ -145,36 +144,37 @@ public class PdfConverter implements Runnable {
         mResultMap = resultMap;
         mPromise = promise;
         mBaseURL = baseURL;
-        runOnUiThread(this);
+        mMutex = mutex;
+        runOnUiThread (this);
     }
 
-    private ParcelFileDescriptor getOutputFileDescriptor() {
+    private ParcelFileDescriptor getOutputFileDescriptor () {
         try {
-            mPdfFile.createNewFile();
-            return ParcelFileDescriptor.open(mPdfFile, ParcelFileDescriptor.MODE_TRUNCATE | ParcelFileDescriptor.MODE_READ_WRITE);
+            mPdfFile.createNewFile ();
+            return ParcelFileDescriptor.open (mPdfFile, ParcelFileDescriptor.MODE_TRUNCATE | ParcelFileDescriptor.MODE_READ_WRITE);
         } catch (Exception e) {
-            Log.d(TAG, "Failed to open ParcelFileDescriptor", e);
+            Log.d (TAG, "Failed to open ParcelFileDescriptor", e);
         }
         return null;
     }
 
-    private PrintAttributes getDefaultPrintAttrs() {
+    private PrintAttributes getDefaultPrintAttrs () {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.KITKAT) return null;
 
-        return new PrintAttributes.Builder()
-                .setMediaSize(PrintAttributes.MediaSize.NA_LETTER)
-                .setResolution(new PrintAttributes.Resolution("RESOLUTION_ID", "RESOLUTION_ID", 600, 600))
-                .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
-                .build();
+        return new PrintAttributes.Builder ()
+                .setMediaSize (PrintAttributes.MediaSize.NA_LETTER)
+                .setResolution (new PrintAttributes.Resolution ("RESOLUTION_ID", "RESOLUTION_ID", 600, 600))
+                .setMinMargins (PrintAttributes.Margins.NO_MARGINS)
+                .build ();
 
     }
 
-    private void runOnUiThread(Runnable runnable) {
-        Handler handler = new Handler(mContext.getMainLooper());
-        handler.post(runnable);
+    private void runOnUiThread (Runnable runnable) {
+        Handler handler = new Handler (mContext.getMainLooper ());
+        handler.post (runnable);
     }
 
-    private void destroy() {
+    private void destroy () {
         mContext = null;
         mHtmlString = null;
         mPdfFile = null;
@@ -186,10 +186,10 @@ public class PdfConverter implements Runnable {
         mPromise = null;
     }
 
-    private String encodeFromFile(File file) throws IOException{
-      RandomAccessFile randomAccessFile = new RandomAccessFile(file, "r");
-      byte[] fileBytes = new byte[(int)randomAccessFile.length()];
-      randomAccessFile.readFully(fileBytes);
-      return Base64.encodeToString(fileBytes, Base64.DEFAULT);
+    private String encodeFromFile (File file) throws IOException {
+        RandomAccessFile randomAccessFile = new RandomAccessFile (file, "r");
+        byte[] fileBytes = new byte[(int) randomAccessFile.length ()];
+        randomAccessFile.readFully (fileBytes);
+        return Base64.encodeToString (fileBytes, Base64.DEFAULT);
     }
 }
