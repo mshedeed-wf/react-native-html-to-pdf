@@ -5,6 +5,6 @@ const options: Options = {
     base64: true,
 };
 
-convert(options).then((pdf: Pdf) => {
-    // get the generated base64 content or filePath
+convert(options).then((filePath: string) => {
+
 });

@@ -115,7 +115,7 @@ public class RNHTMLtoPDFModule extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
-    public void convertAndMerge (
+    public void mergeAndConvert (
             final ReadableMap options,
             final Promise promise
     ) {
