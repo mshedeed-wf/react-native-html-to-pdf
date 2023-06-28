@@ -23,9 +23,15 @@ export interface Options {
     fonts?: string[] | undefined;
 }
 
+export interface MergeOptions {
+    html: string[];
+    fileName?: string | undefined;
+}
+
 export interface Pdf {
     filePath?: string | undefined;
     base64?: string | undefined;
 }
 
-export function convert(options: Options): Promise<Pdf>;
+export function convert(options: Options): Promise<string>;
+export function convertAndMerge(options: MergeOptions): Promise<string>;
