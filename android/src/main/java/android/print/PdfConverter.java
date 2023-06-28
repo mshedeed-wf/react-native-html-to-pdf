@@ -17,7 +17,6 @@ import android.webkit.WebViewClient;
 
 import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.WritableMap;
-import com.tom_roush.pdfbox.pdmodel.PDDocument;
 
 import java.io.File;
 import java.io.IOException;
@@ -73,21 +72,8 @@ public class PdfConverter implements Runnable {
                     documentAdapter.onWrite (new PageRange[]{PageRange.ALL_PAGES}, getOutputFileDescriptor (), null, new PrintDocumentAdapter.WriteResultCallback () {
                         @Override
                         public void onWriteFinished (PageRange[] pages) {
-                            try {
-                                String base64 = "";
-                                if (mShouldEncode) {
-                                    base64 = encodeFromFile (mPdfFile);
-                                }
-
-                                PDDocument myDocument = PDDocument.load (mPdfFile);
-                                int pagesToBePrinted = myDocument.getNumberOfPages ();
-
-                                mMutex.release ();
-                            } catch (IOException e) {
-                                mPromise.reject (e.getMessage ());
-                            } finally {
-                                destroy ();
-                            }
+                            mMutex.release ();
+                            destroy ();
                         }
 
                         @Override
