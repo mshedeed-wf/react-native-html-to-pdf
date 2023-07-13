@@ -11,9 +11,9 @@ import android.os.Handler;
 import android.os.ParcelFileDescriptor;
 import android.util.Base64;
 import android.util.Log;
+import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
-import android.webkit.WebViewClient;
 
 import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.WritableMap;
@@ -60,43 +60,51 @@ public class PdfConverter implements Runnable {
     @Override
     public void run () {
         mWebView = new WebView (mContext);
-        mWebView.setWebViewClient (new WebViewClient () {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            mWebView.setRendererPriorityPolicy (WebView.RENDERER_PRIORITY_IMPORTANT, false);
+        }
+        mWebView.setWebChromeClient (new WebChromeClient () {
             @Override
-            public void onPageFinished (WebView view, String url) {
-                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.KITKAT)
-                    throw new RuntimeException ("call requires API level 19");
-                else {
-                    PrintDocumentAdapter documentAdapter = mWebView.createPrintDocumentAdapter ();
-                    documentAdapter.onLayout (null, getPdfPrintAttrs (), null, new PrintDocumentAdapter.LayoutResultCallback () {
+            public void onProgressChanged (WebView view, int newProgress) {
+                super.onProgressChanged (view, newProgress);
+                if (newProgress == 100 && !mIsCurrentlyConverting) {
+                    if (view.getContentHeight () == 0) {
+                        view.reload ();
+                        return;
+                    }
+                    mIsCurrentlyConverting = true;
+                    PrintDocumentAdapter printAdapter = mWebView.createPrintDocumentAdapter ();
+                    printAdapter.onLayout (null, getPdfPrintAttrs (), null, new PrintDocumentAdapter.LayoutResultCallback () {
                     }, null);
-                    documentAdapter.onWrite (new PageRange[]{PageRange.ALL_PAGES}, getOutputFileDescriptor (), null, new PrintDocumentAdapter.WriteResultCallback () {
+                    printAdapter.onWrite (new PageRange[]{PageRange.ALL_PAGES}, getOutputFileDescriptor (), null, new PrintDocumentAdapter.WriteResultCallback () {
                         @Override
                         public void onWriteFinished (PageRange[] pages) {
+                            super.onWriteFinished (pages);
                             mMutex.release ();
                             destroy ();
                         }
 
                         @Override
                         public void onWriteFailed (CharSequence error) {
-                            String errorResult = "Please retry, Error occurred generating the pdf";
-                            if (error != null) {
-                                errorResult = error.toString ();
-                            }
-                            mPromise.reject (errorResult);
+                            super.onWriteFailed (error);
+                            mMutex.release ();
                             destroy ();
                         }
 
                         @Override
                         public void onWriteCancelled () {
+                            super.onWriteCancelled ();
+                            mMutex.release ();
                             destroy ();
-                        }
 
+                        }
                     });
                 }
             }
         });
         WebSettings settings = mWebView.getSettings ();
         settings.setTextZoom (100);
+        settings.setCacheMode (WebSettings.LOAD_NO_CACHE);
         settings.setDefaultTextEncodingName ("utf-8");
         settings.setAllowFileAccess (true);
         mWebView.loadDataWithBaseURL (mBaseURL, mHtmlString, "text/HTML", "utf-8", null);
@@ -125,7 +133,6 @@ public class PdfConverter implements Runnable {
         mContext = context;
         mHtmlString = htmlString;
         mPdfFile = file;
-        mIsCurrentlyConverting = true;
         mShouldEncode = shouldEncode;
         mResultMap = resultMap;
         mPromise = promise;
