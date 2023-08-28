@@ -11,9 +11,9 @@ import android.os.Handler;
 import android.os.ParcelFileDescriptor;
 import android.util.Base64;
 import android.util.Log;
-import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
+import android.webkit.WebViewClient;
 
 import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.WritableMap;
@@ -63,15 +63,15 @@ public class PdfConverter implements Runnable {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             mWebView.setRendererPriorityPolicy (WebView.RENDERER_PRIORITY_IMPORTANT, false);
         }
-        mWebView.setWebChromeClient (new WebChromeClient () {
+        mWebView.setWebViewClient (new WebViewClient () {
             @Override
-            public void onProgressChanged (WebView view, int newProgress) {
-                super.onProgressChanged (view, newProgress);
-                if (newProgress == 100 && !mIsCurrentlyConverting) {
-                    if (view.getContentHeight () == 0) {
-                        view.reload ();
-                        return;
-                    }
+            public void onPageFinished (WebView view, String url) {
+                super.onPageFinished (view, url);
+                if (view.getContentHeight () == 0) {
+                    view.reload ();
+                    return;
+                }
+                if (!mIsCurrentlyConverting) {
                     mIsCurrentlyConverting = true;
                     PrintDocumentAdapter printAdapter = mWebView.createPrintDocumentAdapter ();
                     printAdapter.onLayout (null, getPdfPrintAttrs (), null, new PrintDocumentAdapter.LayoutResultCallback () {
@@ -80,27 +80,28 @@ public class PdfConverter implements Runnable {
                         @Override
                         public void onWriteFinished (PageRange[] pages) {
                             super.onWriteFinished (pages);
-                            mMutex.release ();
                             destroy ();
+                            mMutex.release ();
                         }
 
                         @Override
                         public void onWriteFailed (CharSequence error) {
                             super.onWriteFailed (error);
-                            mMutex.release ();
                             destroy ();
+                            mMutex.release ();
                         }
 
                         @Override
                         public void onWriteCancelled () {
                             super.onWriteCancelled ();
-                            mMutex.release ();
                             destroy ();
+                            mMutex.release ();
 
                         }
                     });
                 }
             }
+
         });
         WebSettings settings = mWebView.getSettings ();
         settings.setTextZoom (100);
@@ -172,8 +173,8 @@ public class PdfConverter implements Runnable {
         mHtmlString = null;
         mPdfFile = null;
         mPdfPrintAttrs = null;
-        mIsCurrentlyConverting = false;
         mWebView = null;
+        mIsCurrentlyConverting = false;
         mShouldEncode = false;
         mResultMap = null;
         mPromise = null;
