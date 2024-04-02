@@ -10,6 +10,7 @@ export interface Options {
     directory?: string | undefined;
     height?: number | undefined;
     width?: number | undefined;
+    watermark?: boolean | undefined;
 
     // iOS only
     paddingLeft?: number | undefined;
@@ -27,6 +28,7 @@ export interface MergeOptions {
     html: string[];
     fileName?: string | undefined;
     directory?: string | undefined;
+    watermark?: boolean | undefined;
 }
 
 export interface Pdf {

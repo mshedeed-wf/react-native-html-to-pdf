@@ -13,8 +13,14 @@ import com.facebook.react.bridge.ReactMethod;
 import com.facebook.react.bridge.ReadableArray;
 import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.bridge.WritableMap;
+import com.tom_roush.pdfbox.android.PDFBoxResourceLoader;
 import com.tom_roush.pdfbox.io.MemoryUsageSetting;
 import com.tom_roush.pdfbox.multipdf.PDFMergerUtility;
+import com.tom_roush.pdfbox.pdmodel.PDDocument;
+import com.tom_roush.pdfbox.pdmodel.PDPage;
+import com.tom_roush.pdfbox.pdmodel.PDPageContentStream;
+import com.tom_roush.pdfbox.pdmodel.font.PDFont;
+import com.tom_roush.pdfbox.pdmodel.font.PDType1Font;
 
 import java.io.File;
 import java.io.IOException;
@@ -28,6 +34,7 @@ public class RNHTMLtoPDFModule extends ReactContextBaseJavaModule {
     private static final String FILE_NAME = "fileName";
     private static final String FILE_NAMES = "fileNames";
     private static final String DIRECTORY = "directory";
+    private static final String WATERMARK = "watermark";
     private static final String BASE_64 = "base64";
     private static final String BASE_URL = "baseURL";
     private static final String HEIGHT = "height";
@@ -108,7 +115,40 @@ public class RNHTMLtoPDFModule extends ReactContextBaseJavaModule {
                     mutex
             );
             mutex.acquire ();
+            PDDocument newPdf = PDDocument.load (destinationFile);
+            PDFBoxResourceLoader.init (getReactApplicationContext ());
+            PDFont pdfFont = PDType1Font.HELVETICA;
+            int fontSize = 15;
+            boolean watermark = false;
+            if (options.hasKey (WATERMARK)) {
+                watermark = options.getBoolean (WATERMARK);
+            }
+            float titleWidth = pdfFont.getStringWidth ("Powered by Waveform - Upgrade to remove") / 1000 * fontSize;
+            // Loop through all pages
+            for (int i = 0; i < newPdf.getNumberOfPages (); i++) {
+                PDPage firstPage = newPdf.getPage (i);
+
+                PDPageContentStream contentStream = new PDPageContentStream (newPdf, firstPage, PDPageContentStream.AppendMode.APPEND, true, true);
+                contentStream.setFont (pdfFont, fontSize);
+                contentStream.beginText ();
+                contentStream.setNonStrokingColor (0f, 0.4f, 0.604f);
+                contentStream.newLineAtOffset (25, 15);
+                contentStream.showText ("Page " + (i + 1) + " of " + newPdf.getNumberOfPages ());
+                contentStream.endText ();
+
+                if (watermark) {
+                    contentStream.beginText ();
+                    contentStream.newLineAtOffset ((float) ((firstPage.getMediaBox ().getWidth () - titleWidth - 15)), 15);
+                    contentStream.showText ("Powered by Waveform - Upgrade to remove");
+                    contentStream.endText ();
+                }
+
+                contentStream.close ();
+            }
+            newPdf.save (destinationFile);
             promise.resolve (destinationFile.getAbsolutePath ());
+
+
         } catch (Exception e) {
             promise.reject (e);
         }
@@ -209,7 +249,37 @@ public class RNHTMLtoPDFModule extends ReactContextBaseJavaModule {
                 File tempFile = new File (file);
                 tempFile.delete ();
             }
+            PDDocument newPdf = PDDocument.load (destinationFile);
+            PDFBoxResourceLoader.init (getReactApplicationContext ());
+            PDFont pdfFont = PDType1Font.HELVETICA;
+            int fontSize = 15;
+            boolean watermark = false;
+            if (options.hasKey (WATERMARK)) {
+                watermark = options.getBoolean (WATERMARK);
+            }
+            float titleWidth = pdfFont.getStringWidth ("Powered by Waveform - Upgrade to remove") / 1000 * fontSize;
+            // Loop through all pages
+            for (int i = 0; i < newPdf.getNumberOfPages (); i++) {
+                PDPage firstPage = newPdf.getPage (i);
 
+                PDPageContentStream contentStream = new PDPageContentStream (newPdf, firstPage, PDPageContentStream.AppendMode.APPEND, true, true);
+                contentStream.setFont (pdfFont, fontSize);
+                contentStream.beginText ();
+                contentStream.setNonStrokingColor (0f, 0.4f, 0.604f);
+                contentStream.newLineAtOffset (25, 15);
+                contentStream.showText ("Page " + (i + 1) + " of " + newPdf.getNumberOfPages ());
+                contentStream.endText ();
+
+                if (watermark) {
+                    contentStream.beginText ();
+                    contentStream.newLineAtOffset ((float) ((firstPage.getMediaBox ().getWidth () - titleWidth - 15)), 15);
+                    contentStream.showText ("Powered by Waveform - Upgrade to remove");
+                    contentStream.endText ();
+                }
+
+                contentStream.close ();
+            }
+            newPdf.save (destinationFile);
             promise.resolve (destinationFile.getAbsolutePath ());
 
         } catch (Exception e) {
