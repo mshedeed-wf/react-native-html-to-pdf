@@ -108,6 +108,7 @@ public class PdfConverter implements Runnable {
         settings.setCacheMode (WebSettings.LOAD_NO_CACHE);
         settings.setDefaultTextEncodingName ("utf-8");
         settings.setAllowFileAccess (true);
+        settings.setAllowContentAccess(true);
         mWebView.loadDataWithBaseURL (mBaseURL, mHtmlString, "text/HTML", "utf-8", null);
     }
 
