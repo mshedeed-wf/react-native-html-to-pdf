@@ -5,12 +5,15 @@
 
 package android.print;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
+import android.net.http.SslError;
 import android.os.Build;
 import android.os.Handler;
 import android.os.ParcelFileDescriptor;
 import android.util.Base64;
 import android.util.Log;
+import android.webkit.SslErrorHandler;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -45,7 +48,6 @@ public class PdfConverter implements Runnable {
     private boolean mShouldEncode;
     private WritableMap mResultMap;
     private Promise mPromise;
-    private String mBaseURL;
 
     private PdfConverter () {
     }
@@ -60,10 +62,22 @@ public class PdfConverter implements Runnable {
     @Override
     public void run () {
         mWebView = new WebView (mContext);
+        WebSettings settings = mWebView.getSettings ();
+        settings.setDefaultTextEncodingName ("utf-8");
+        settings.setAllowFileAccess (true);
+        settings.setAllowContentAccess(true);
+        settings.setAllowFileAccessFromFileURLs(true);
+        settings.setDomStorageEnabled(true);
+        settings.setAllowUniversalAccessFromFileURLs(true);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             mWebView.setRendererPriorityPolicy (WebView.RENDERER_PRIORITY_IMPORTANT, false);
         }
         mWebView.setWebViewClient (new WebViewClient () {
+            @SuppressLint("WebViewClientOnReceivedSslError")
+            @Override
+            public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError er) {
+                handler.proceed();
+            }
             @Override
             public void onPageFinished (WebView view, String url) {
                 super.onPageFinished (view, url);
@@ -96,20 +110,13 @@ public class PdfConverter implements Runnable {
                             super.onWriteCancelled ();
                             destroy ();
                             mMutex.release ();
-
                         }
                     });
                 }
             }
 
         });
-        WebSettings settings = mWebView.getSettings ();
-        settings.setTextZoom (100);
-        settings.setCacheMode (WebSettings.LOAD_NO_CACHE);
-        settings.setDefaultTextEncodingName ("utf-8");
-        settings.setAllowFileAccess (true);
-        settings.setAllowContentAccess(true);
-        mWebView.loadDataWithBaseURL (mBaseURL, mHtmlString, "text/HTML", "utf-8", null);
+        mWebView.loadDataWithBaseURL ("file:///", mHtmlString, "text/HTML", "utf-8", null);
     }
 
     public PrintAttributes getPdfPrintAttrs () {
@@ -121,7 +128,7 @@ public class PdfConverter implements Runnable {
     }
 
     public void convert (Context context, String htmlString, File file, boolean shouldEncode, WritableMap resultMap,
-                         Promise promise, String baseURL, Semaphore mutex) throws Exception {
+                         Promise promise, Semaphore mutex) throws Exception {
         if (context == null)
             throw new Exception ("context can't be null");
         if (htmlString == null)
@@ -138,7 +145,6 @@ public class PdfConverter implements Runnable {
         mShouldEncode = shouldEncode;
         mResultMap = resultMap;
         mPromise = promise;
-        mBaseURL = baseURL;
         mMutex = mutex;
         runOnUiThread (this);
     }

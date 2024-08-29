@@ -36,7 +36,6 @@ public class RNHTMLtoPDFModule extends ReactContextBaseJavaModule {
     private static final String DIRECTORY = "directory";
     private static final String WATERMARK = "watermark";
     private static final String BASE_64 = "base64";
-    private static final String BASE_URL = "baseURL";
     private static final String HEIGHT = "height";
     private static final String WIDTH = "width";
 
@@ -110,7 +109,6 @@ public class RNHTMLtoPDFModule extends ReactContextBaseJavaModule {
                     options.hasKey (BASE_64) && options.getBoolean (BASE_64),
                     Arguments.createMap (),
                     promise,
-                    options.hasKey (BASE_URL) ? options.getString (BASE_URL) : null,
                     pagesize,
                     mutex
             );
@@ -223,7 +221,6 @@ public class RNHTMLtoPDFModule extends ReactContextBaseJavaModule {
                             options.hasKey (BASE_64) && options.getBoolean (BASE_64),
                             Arguments.createMap (),
                             promise,
-                            options.hasKey (BASE_URL) ? options.getString (BASE_URL) : null,
                             pagesize,
                             mutex
                     );
@@ -289,12 +286,12 @@ public class RNHTMLtoPDFModule extends ReactContextBaseJavaModule {
 
 
     private void convertToPDF (String htmlString, File file, boolean shouldEncode, WritableMap resultMap, Promise promise,
-                               String baseURL, PrintAttributes printAttributes,
+                               PrintAttributes printAttributes,
                                Semaphore mutex
     ) throws Exception {
         PdfConverter pdfConverter = PdfConverter.getInstance ();
         if (printAttributes != null) pdfConverter.setPdfPrintAttrs (printAttributes);
-        pdfConverter.convert (mReactContext, htmlString, file, shouldEncode, resultMap, promise, baseURL, mutex);
+        pdfConverter.convert (mReactContext, htmlString, file, shouldEncode, resultMap, promise, mutex);
     }
 
     private File getTempFile (String fileName) throws IOException {
