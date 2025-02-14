@@ -296,8 +296,7 @@ public class RNHTMLtoPDFModule extends ReactContextBaseJavaModule {
 
     private File getTempFile (String fileName) throws IOException {
         File outputDir = getReactApplicationContext ().getCacheDir ();
-        return File.createTempFile (fileName, PDF_EXTENSION, outputDir);
-
+        return new File(outputDir, fileName + PDF_EXTENSION);
     }
 
     private boolean isFileNameValid (String fileName) throws Exception {
