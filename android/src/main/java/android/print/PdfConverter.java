@@ -73,11 +73,6 @@ public class PdfConverter implements Runnable {
             mWebView.setRendererPriorityPolicy (WebView.RENDERER_PRIORITY_IMPORTANT, false);
         }
         mWebView.setWebViewClient (new WebViewClient () {
-            @SuppressLint("WebViewClientOnReceivedSslError")
-            @Override
-            public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError er) {
-                handler.proceed();
-            }
             @Override
             public void onPageFinished (WebView view, String url) {
                 super.onPageFinished (view, url);
