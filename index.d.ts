@@ -38,3 +38,4 @@ export interface Pdf {
 
 export function convert(options: Options): Promise<string>;
 export function mergeAndConvert(options: MergeOptions): Promise<string>;
+export function extractAnchorPages(filePath: string, anchors: string[]): Promise<Record<string, number>>;
