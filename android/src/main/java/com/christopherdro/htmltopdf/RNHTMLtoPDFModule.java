@@ -115,34 +115,12 @@ public class RNHTMLtoPDFModule extends ReactContextBaseJavaModule {
             mutex.acquire ();
             PDDocument newPdf = PDDocument.load (destinationFile);
             PDFBoxResourceLoader.init (getReactApplicationContext ());
-            PDFont pdfFont = PDType1Font.HELVETICA;
-            int fontSize = 15;
             boolean watermark = false;
             if (options.hasKey (WATERMARK)) {
                 watermark = options.getBoolean (WATERMARK);
             }
-            float titleWidth = pdfFont.getStringWidth ("Powered by Waveform - Upgrade to remove") / 1000 * fontSize;
-            // Loop through all pages
-            for (int i = 0; i < newPdf.getNumberOfPages (); i++) {
-                PDPage firstPage = newPdf.getPage (i);
-
-                PDPageContentStream contentStream = new PDPageContentStream (newPdf, firstPage, PDPageContentStream.AppendMode.APPEND, true, true);
-                contentStream.setFont (pdfFont, fontSize);
-                contentStream.beginText ();
-                contentStream.setNonStrokingColor (0f, 0.4f, 0.604f);
-                contentStream.newLineAtOffset (25, 15);
-                contentStream.showText ("Page " + (i + 1) + " of " + newPdf.getNumberOfPages ());
-                contentStream.endText ();
-
-                if (watermark) {
-                    contentStream.beginText ();
-                    contentStream.newLineAtOffset ((float) ((firstPage.getMediaBox ().getWidth () - titleWidth - 15)), 15);
-                    contentStream.showText ("Powered by Waveform - Upgrade to remove");
-                    contentStream.endText ();
-                }
-
-                contentStream.close ();
-            }
+            // Use optimized page numbering method
+            addPageNumbersOptimized(newPdf, watermark);
             newPdf.save (destinationFile);
             promise.resolve (destinationFile.getAbsolutePath ());
 
@@ -248,34 +226,12 @@ public class RNHTMLtoPDFModule extends ReactContextBaseJavaModule {
             }
             PDDocument newPdf = PDDocument.load (destinationFile);
             PDFBoxResourceLoader.init (getReactApplicationContext ());
-            PDFont pdfFont = PDType1Font.HELVETICA;
-            int fontSize = 15;
             boolean watermark = false;
             if (options.hasKey (WATERMARK)) {
                 watermark = options.getBoolean (WATERMARK);
             }
-            float titleWidth = pdfFont.getStringWidth ("Powered by Waveform - Upgrade to remove") / 1000 * fontSize;
-            // Loop through all pages
-            for (int i = 0; i < newPdf.getNumberOfPages (); i++) {
-                PDPage firstPage = newPdf.getPage (i);
-
-                PDPageContentStream contentStream = new PDPageContentStream (newPdf, firstPage, PDPageContentStream.AppendMode.APPEND, true, true);
-                contentStream.setFont (pdfFont, fontSize);
-                contentStream.beginText ();
-                contentStream.setNonStrokingColor (0f, 0.4f, 0.604f);
-                contentStream.newLineAtOffset (25, 15);
-                contentStream.showText ("Page " + (i + 1) + " of " + newPdf.getNumberOfPages ());
-                contentStream.endText ();
-
-                if (watermark) {
-                    contentStream.beginText ();
-                    contentStream.newLineAtOffset ((float) ((firstPage.getMediaBox ().getWidth () - titleWidth - 15)), 15);
-                    contentStream.showText ("Powered by Waveform - Upgrade to remove");
-                    contentStream.endText ();
-                }
-
-                contentStream.close ();
-            }
+            // Use optimized page numbering method
+            addPageNumbersOptimized(newPdf, watermark);
             newPdf.save (destinationFile);
             promise.resolve (destinationFile.getAbsolutePath ());
 
@@ -302,4 +258,106 @@ public class RNHTMLtoPDFModule extends ReactContextBaseJavaModule {
     private boolean isFileNameValid (String fileName) throws Exception {
         return new File (fileName).getCanonicalFile ().getName ().equals (fileName);
     }
+
+    @ReactMethod
+    public void extractAnchorPages(final String filePath, final ReadableArray anchors, final Promise promise) {
+        try {
+            if (filePath == null) {
+                promise.reject(new Exception("RNHTMLtoPDF error: Invalid filePath parameter."));
+                return;
+            }
+            PDFBoxResourceLoader.init (getReactApplicationContext ());
+            PDDocument document = PDDocument.load(new File(filePath));
+            com.tom_roush.pdfbox.text.PDFTextStripper stripper = new com.tom_roush.pdfbox.text.PDFTextStripper();
+            int pageCount = document.getNumberOfPages();
+
+            // Build a quick lookup for anchors
+            java.util.HashMap<String, Integer> result = new java.util.HashMap<>();
+            java.util.HashSet<String> remaining = new java.util.HashSet<>();
+            for (int i = 0; i < anchors.size(); i++) {
+                String a = anchors.getString(i);
+                remaining.add(a);
+            }
+
+            for (int page = 1; page <= pageCount && !remaining.isEmpty(); page++) {
+                stripper.setStartPage(page);
+                stripper.setEndPage(page);
+                String text = stripper.getText(document);
+                if (text == null) text = "";
+                for (String a : new java.util.ArrayList<>(remaining)) {
+                    String needle = "__TOC_ANCHOR__:" + a;
+                    if (text.contains(needle)) {
+                        result.put(a, page);
+                        remaining.remove(a);
+                    }
+                }
+            }
+            document.close();
+
+            WritableMap map = Arguments.createMap();
+            for (java.util.Map.Entry<String, Integer> e : result.entrySet()) {
+                map.putInt(e.getKey(), e.getValue());
+            }
+            promise.resolve(map);
+        } catch (Exception e) {
+            promise.reject(e);
+        }
+    }
+
+    /**
+     * Optimized method to add page numbers and watermarks to PDF pages
+     * Reduces performance overhead by pre-calculating values and minimizing repetitive operations
+     */
+    private void addPageNumbersOptimized(PDDocument document, boolean watermark) throws IOException {
+        if (document == null || document.getNumberOfPages() == 0) {
+            return;
+        }
+
+        // Pre-calculate values outside the loop for better performance
+        PDFont pdfFont = PDType1Font.HELVETICA;
+        int fontSize = 15;
+        String watermarkText = "Powered by Waveform - Upgrade to remove";
+        float titleWidth = watermark ? pdfFont.getStringWidth(watermarkText) / 1000 * fontSize : 0;
+        int totalPages = document.getNumberOfPages();
+        String totalPagesStr = " of " + totalPages;
+
+        // Pre-allocate StringBuilder for string concatenation efficiency
+        StringBuilder pageNumberBuilder = new StringBuilder();
+
+        // Loop through all pages with optimizations
+        for (int i = 0; i < totalPages; i++) {
+            PDPage page = document.getPage(i);
+
+            // Use try-with-resources for automatic resource management
+            try (PDPageContentStream contentStream = new PDPageContentStream(document, page,
+                    PDPageContentStream.AppendMode.APPEND, true, true)) {
+
+                // Set font and color once per page (unavoidable due to PDFBox API)
+                contentStream.setFont(pdfFont, fontSize);
+                contentStream.setNonStrokingColor(0f, 0.4f, 0.604f);
+
+                // Optimize page number string building
+                pageNumberBuilder.setLength(0); // Clear previous content
+                pageNumberBuilder.append("Page ").append(i + 1).append(totalPagesStr);
+
+                // Add page number
+                contentStream.beginText();
+                contentStream.newLineAtOffset(25, 15);
+                contentStream.showText(pageNumberBuilder.toString());
+                contentStream.endText();
+
+                // Add watermark if enabled
+                if (watermark) {
+                    float watermarkX = page.getMediaBox().getWidth() - titleWidth - 15;
+                    contentStream.beginText();
+                    contentStream.newLineAtOffset(watermarkX, 15);
+                    contentStream.showText(watermarkText);
+                    contentStream.endText();
+                }
+            }
+        }
+    }
 }
+
+
+
