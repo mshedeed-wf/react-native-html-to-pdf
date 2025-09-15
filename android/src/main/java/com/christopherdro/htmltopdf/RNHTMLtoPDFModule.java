@@ -216,7 +216,7 @@ public class RNHTMLtoPDFModule extends ReactContextBaseJavaModule {
             }
 
             pdfMerger.setDestinationFileName (destinationFile.getAbsolutePath ());
-            pdfMerger.setDocumentMergeMode (PDFMergerUtility.DocumentMergeMode.OPTIMIZE_RESOURCES_MODE);
+            pdfMerger.setDocumentMergeMode (PDFMergerUtility.DocumentMergeMode.PDFBOX_LEGACY_MODE);
             pdfMerger.mergeDocuments (MemoryUsageSetting.setupTempFileOnly ());
 
             // Delete temp files
