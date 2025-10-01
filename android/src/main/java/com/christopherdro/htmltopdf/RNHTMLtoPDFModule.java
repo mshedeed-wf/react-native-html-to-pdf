@@ -224,15 +224,18 @@ public class RNHTMLtoPDFModule extends ReactContextBaseJavaModule {
                 File tempFile = new File (file);
                 tempFile.delete ();
             }
-            PDDocument newPdf = PDDocument.load (destinationFile);
-            PDFBoxResourceLoader.init (getReactApplicationContext ());
-            boolean watermark = false;
-            if (options.hasKey (WATERMARK)) {
-                watermark = options.getBoolean (WATERMARK);
+
+            // Use try-with-resources for automatic memory management of PDDocument
+            try (PDDocument newPdf = PDDocument.load (destinationFile, MemoryUsageSetting.setupTempFileOnly ())) {
+                PDFBoxResourceLoader.init (getReactApplicationContext ());
+                boolean watermark = false;
+                if (options.hasKey (WATERMARK)) {
+                    watermark = options.getBoolean (WATERMARK);
+                }
+                // Use optimized page numbering method
+                addPageNumbersOptimized(newPdf, watermark);
+                newPdf.save (destinationFile);
             }
-            // Use optimized page numbering method
-            addPageNumbersOptimized(newPdf, watermark);
-            newPdf.save (destinationFile);
             promise.resolve (destinationFile.getAbsolutePath ());
 
         } catch (Exception e) {
@@ -267,7 +270,7 @@ public class RNHTMLtoPDFModule extends ReactContextBaseJavaModule {
                 return;
             }
             PDFBoxResourceLoader.init (getReactApplicationContext ());
-            PDDocument document = PDDocument.load(new File(filePath));
+            PDDocument document = PDDocument.load(new File(filePath), MemoryUsageSetting.setupTempFileOnly ());
             com.tom_roush.pdfbox.text.PDFTextStripper stripper = new com.tom_roush.pdfbox.text.PDFTextStripper();
             int pageCount = document.getNumberOfPages();
 
@@ -358,6 +361,3 @@ public class RNHTMLtoPDFModule extends ReactContextBaseJavaModule {
         }
     }
 }
-
-
-
