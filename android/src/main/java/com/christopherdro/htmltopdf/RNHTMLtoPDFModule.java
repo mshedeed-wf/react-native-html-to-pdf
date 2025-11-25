@@ -210,20 +210,58 @@ public class RNHTMLtoPDFModule extends ReactContextBaseJavaModule {
 
             }
 
-            PDFMergerUtility pdfMerger = new PDFMergerUtility ();
-            for (String file : tempFiles) {
-                pdfMerger.addSource (new File (file));
+            // Merge documents sequentially to minimize memory usage
+            MemoryUsageSetting memSettings = MemoryUsageSetting.setupTempFileOnly();
+            PDDocument mergedDoc = null;
+
+            try {
+                for (int i = 0; i < tempFiles.size(); i++) {
+                    String file = tempFiles.get(i);
+                    PDDocument tempDoc = null;
+
+                    try {
+                        // Load document with memory-efficient settings
+                        tempDoc = PDDocument.load(new File(file), memSettings);
+
+                        if (mergedDoc == null) {
+                            // First document becomes the base
+                            mergedDoc = tempDoc;
+                            tempDoc = null; // Prevent closing in finally block
+                        } else {
+                            // Append subsequent documents
+                            PDFMergerUtility merger = new PDFMergerUtility();
+                            merger.appendDocument(mergedDoc, tempDoc);
+                            tempDoc.close();
+                            tempDoc = null;
+
+                            // Force garbage collection after each merge
+                            if (i % 2 == 0) { // GC every 2 documents
+                                System.gc();
+                            }
+                        }
+                    } finally {
+                        if (tempDoc != null) {
+                            tempDoc.close();
+                        }
+                    }
+                }
+
+                // Save the merged document
+                if (mergedDoc != null) {
+                    mergedDoc.save(destinationFile);
+                }
+            } finally {
+                if (mergedDoc != null) {
+                    mergedDoc.close();
+                }
             }
 
-            pdfMerger.setDestinationFileName (destinationFile.getAbsolutePath ());
-            pdfMerger.setDocumentMergeMode (PDFMergerUtility.DocumentMergeMode.PDFBOX_LEGACY_MODE);
-            pdfMerger.mergeDocuments (MemoryUsageSetting.setupTempFileOnly ());
-
-            // Delete temp files
+            // Delete temp files and force garbage collection
             for (String file : tempFiles) {
                 File tempFile = new File (file);
                 tempFile.delete ();
             }
+            System.gc();
 
             // Use try-with-resources for automatic memory management of PDDocument
             try (PDDocument newPdf = PDDocument.load (destinationFile, MemoryUsageSetting.setupTempFileOnly ())) {
